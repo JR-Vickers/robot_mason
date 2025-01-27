@@ -17,10 +17,10 @@ This project creates a simulation environment for robotic stone carving, demonst
 - [✅] Add simple stone block (as a cube primitive)
 - [✅] Implement basic camera controls for viewing the simulation
 - [✅] Add coordinate system visualization
-- [ ] Create simple UI controls (sliders) for manual robot control
+- [✅] Create simple UI controls (sliders) for manual robot control
 - [✅] Implement gravity and basic physics
 - [✅] Add ability to reset simulation to initial state
-- [ ] Create simple logging system for debugging
+- [✅] Create simple logging system for debugging
 
 ## Phase 2: Robot Control System
 - [ ] Implement forward kinematics for robot arm

@@ -25,6 +25,7 @@ class SimulationCore:
         self.physics_client = None
         self.robot_id = None
         self.stone_id = None
+        self.step_counter = 0  # Add step counter
         # Camera parameters
         self.cam_distance = 2.0
         self.cam_yaw = 45
@@ -40,6 +41,9 @@ class SimulationCore:
         # Basic scene setup
         p.setGravity(0, 0, -9.81)
         p.setRealTimeSimulation(0)  # We'll step manually for better control
+        
+        # Reset step counter
+        self.step_counter = 0
         
         # Disable default keyboard shortcuts
         p.configureDebugVisualizer(p.COV_ENABLE_KEYBOARD_SHORTCUTS, 0)
@@ -172,6 +176,7 @@ class SimulationCore:
         if self.gui:
             self.handle_keyboard()
         p.stepSimulation()
+        self.step_counter += 1  # Increment step counter
         time.sleep(self.dt)  # Maintain real-time simulation
         
     def reset(self) -> None:
@@ -182,6 +187,7 @@ class SimulationCore:
         if self.robot_id is not None:
             p.removeBody(self.robot_id)
             self.robot_id = None
+        self.step_counter = 0  # Reset step counter
         self.setup()
         
     def close(self) -> None:
