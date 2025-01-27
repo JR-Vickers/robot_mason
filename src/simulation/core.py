@@ -8,7 +8,8 @@ import pybullet_data
 import numpy as np
 from pathlib import Path
 import time
-from typing import Tuple, Optional
+from typing import Tuple, Optional, List
+from .robot_control import RobotControl
 
 class SimulationCore:
     def __init__(self, gui: bool = True, fps: int = 240):
@@ -24,6 +25,7 @@ class SimulationCore:
         self.dt = 1.0 / fps
         self.physics_client = None
         self.robot_id = None
+        self.robot_control = None
         self.stone_id = None
         self.step_counter = 0  # Add step counter
         # Camera parameters
@@ -84,8 +86,17 @@ class SimulationCore:
         )
         
     def handle_keyboard(self) -> None:
-        """Handle keyboard input for camera control."""
+        """Handle keyboard input for camera control and robot control."""
         keys = p.getKeyboardEvents()
+        
+        # Emergency stop controls
+        if ord('e') in keys and keys[ord('e')] & p.KEY_WAS_TRIGGERED:
+            if self.robot_control:
+                self.robot_control.emergency_stop()
+                
+        if ord('r') in keys and keys[ord('r')] & p.KEY_WAS_TRIGGERED:
+            if self.robot_control:
+                self.robot_control.reset_estop()
         
         # Camera rotation (arrow keys)
         if p.B3G_LEFT_ARROW in keys and keys[p.B3G_LEFT_ARROW] & p.KEY_IS_DOWN:
@@ -114,17 +125,19 @@ class SimulationCore:
             self.cam_target[0] += 0.05
             
         # Reset camera (R)
-        if ord('r') in keys and keys[ord('r')] & p.KEY_WAS_TRIGGERED:
+        if ord('r') in keys and keys[ord('r')] & p.KEY_WAS_TRIGGERED and not self.robot_control:
+            # Only reset camera if robot control is not initialized (to avoid conflict with e-stop reset)
             self.reset_camera()
             
         self.update_camera()
         
-    def load_robot(self, urdf_path: str) -> Optional[int]:
+    def load_robot(self, urdf_path: str, base_position: List[float] = [0, 0, 0]) -> Optional[int]:
         """
         Load the robot arm into the simulation.
         
         Args:
             urdf_path: Path to the robot's URDF file
+            base_position: [x, y, z] position for robot base
             
         Returns:
             Robot ID if successful, None if failed
@@ -132,9 +145,14 @@ class SimulationCore:
         try:
             self.robot_id = p.loadURDF(
                 urdf_path,
-                basePosition=[0, 0, 0],
+                basePosition=base_position,
                 useFixedBase=True
             )
+            
+            # Initialize robot control
+            num_joints = p.getNumJoints(self.robot_id)
+            self.robot_control = RobotControl(self.robot_id, num_joints)
+            
             return self.robot_id
         except p.error as e:
             print(f"Failed to load robot: {e}")
@@ -187,7 +205,8 @@ class SimulationCore:
         if self.robot_id is not None:
             p.removeBody(self.robot_id)
             self.robot_id = None
-        self.step_counter = 0  # Reset step counter
+            self.robot_control = None
+        self.step_counter = 0
         self.setup()
         
     def close(self) -> None:
