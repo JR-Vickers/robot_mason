@@ -8,8 +8,9 @@ import pybullet_data
 import numpy as np
 from pathlib import Path
 import time
-from typing import Tuple, Optional, List
+from typing import Tuple, Optional, List, Dict
 from .robot_control import RobotControl
+from ..vision.camera import Camera
 
 class SimulationCore:
     def __init__(self, gui: bool = True, fps: int = 240):
@@ -33,6 +34,20 @@ class SimulationCore:
         self.cam_yaw = 45
         self.cam_pitch = -30
         self.cam_target = [0, 0, 0]
+        
+        # Vision system cameras
+        self.cameras: Dict[str, Camera] = {}
+        
+    def add_camera(self, name: str, position: List[float], target: List[float], **kwargs) -> None:
+        """Add a virtual camera to the simulation."""
+        self.cameras[name] = Camera(position, target, **kwargs)
+        
+    def get_camera_view(self, name: str) -> Optional[Dict[str, np.ndarray]]:
+        """Get RGB, depth, and segmentation images from a named camera."""
+        if name not in self.cameras:
+            print(f"Camera '{name}' not found")
+            return None
+        return self.cameras[name].capture()
         
     def setup(self) -> None:
         """Initialize PyBullet and set up the basic scene."""
@@ -193,8 +208,12 @@ class SimulationCore:
         """Step the simulation forward one timestep."""
         if self.gui:
             self.handle_keyboard()
-        p.stepSimulation()
-        self.step_counter += 1  # Increment step counter
+            
+        # Step physics multiple times per frame for better stability
+        for _ in range(10):  # 10 physics steps per frame
+            p.stepSimulation()
+            
+        self.step_counter += 1
         time.sleep(self.dt)  # Maintain real-time simulation
         
     def reset(self) -> None:

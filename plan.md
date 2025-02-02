@@ -35,10 +35,10 @@ This project creates a simulation environment for robotic stone carving, demonst
 - [✅] Add emergency stop functionality
 
 ## Phase 3: Vision System Integration
-- [ ] Set up virtual cameras in simulation
-- [ ] Implement basic image capture from virtual cameras
-- [ ] Create depth map visualization
-- [ ] Implement basic object detection (stone block, robot arm)
+- [✅] Set up virtual cameras in simulation
+- [✅] Implement basic image capture from virtual cameras
+- [✅] Create depth map visualization
+- [✅] Implement basic object detection (stone block, robot arm via segmentation masks)
 - [ ] Add point cloud generation from depth data
 - [ ] Create system for comparing current state to target state
 - [ ] Implement basic progress tracking
