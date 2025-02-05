@@ -6,3 +6,4 @@ black>=23.7.0  # for code formatting
 pylint>=2.17.0  # for code quality
 python-dotenv>=1.0.0  # for environment variables
 open3d>=0.17.0  # for point cloud processing
+psutil>=5.9.0  # for process monitoring
