@@ -5,7 +5,7 @@ A* path planner implementation for robot motion planning.
 import numpy as np
 from typing import List, Tuple, Optional, Dict, Set
 from heapq import heappush, heappop
-from .planner import PathPlanner
+from .planner import PathPlanner, ToolOrientation
 
 class Node:
     def __init__(self, config: np.ndarray, g_cost: float = float('inf'), 
@@ -65,13 +65,26 @@ class AStarPlanner(PathPlanner):
             List of neighboring configurations
         """
         neighbors = []
-        for i in range(len(config)):
-            for step in [-self.step_size, self.step_size]:
-                neighbor = config.copy()
-                neighbor[i] += step
-                
-                # Check joint limits
-                if self.robot_control.is_valid_config(neighbor):
+        try:
+            joint_limits = self.robot_control.get_joint_limits()
+            for i in range(len(config)):
+                for step in [-self.step_size, self.step_size]:
+                    neighbor = config.copy()
+                    neighbor[i] += step
+                    
+                    # Skip if outside joint limits
+                    if neighbor[i] < joint_limits[i][0] or neighbor[i] > joint_limits[i][1]:
+                        continue
+                        
+                    neighbors.append(neighbor)
+                    
+        except (AttributeError, IndexError) as e:
+            print(f"Warning: Error generating neighbors: {e}")
+            # Fall back to simple neighbor generation without validation
+            for i in range(len(config)):
+                for step in [-self.step_size, self.step_size]:
+                    neighbor = config.copy()
+                    neighbor[i] += step
                     neighbors.append(neighbor)
                     
         return neighbors
@@ -92,17 +105,30 @@ class AStarPlanner(PathPlanner):
             current = current.parent
         return list(reversed(path))
         
-    def plan_path(self, start_config: np.ndarray, goal_config: np.ndarray) -> Optional[List[np.ndarray]]:
+    def plan_path(self, start_config: np.ndarray, goal_config: np.ndarray,
+                    tool_orientation: ToolOrientation = ToolOrientation.VERTICAL,
+                    orientation_constraints: Optional[dict] = None) -> Optional[List[np.ndarray]]:
         """
-        Plan path using A* algorithm.
+        Plan path using A* algorithm with orientation constraints.
         
         Args:
             start_config: Starting joint configuration
             goal_config: Goal joint configuration
+            tool_orientation: Desired tool orientation mode
+            orientation_constraints: Additional orientation constraints
             
         Returns:
             List of configurations forming a path, or None if no path found
         """
+        # Check if start and goal satisfy orientation constraints
+        if not self.check_orientation_constraints(start_config, tool_orientation, orientation_constraints):
+            print("Start configuration violates orientation constraints")
+            return None
+        
+        if not self.check_orientation_constraints(goal_config, tool_orientation, orientation_constraints):
+            print("Goal configuration violates orientation constraints")
+            return None
+        
         # Initialize start node
         start_node = Node(start_config, g_cost=0.0, 
                          h_cost=self.heuristic(start_config, goal_config))
@@ -126,8 +152,11 @@ class AStarPlanner(PathPlanner):
             
             # Explore neighbors
             for neighbor_config in self.get_neighbors(current.config):
-                # Skip if in collision
-                if self.check_collision(neighbor_config):
+                # Skip if in collision or violates orientation constraints
+                if (self.check_collision(neighbor_config) or
+                    not self.check_orientation_constraints(neighbor_config, 
+                                                        tool_orientation,
+                                                        orientation_constraints)):
                     continue
                     
                 neighbor = Node(neighbor_config)
