@@ -8,6 +8,7 @@ import time
 from multiprocessing import Process, Queue
 import queue
 import os
+import numpy as np
 
 # Add parent directory to path to import from src
 sys.path.append(str(Path(__file__).parent.parent.parent))
@@ -15,6 +16,7 @@ sys.path.append(str(Path(__file__).parent.parent.parent))
 from src.simulation.process import SimulationProcess, PointCloudProcessorProcess
 from src.vision.visualizer import PointCloudVisualizer
 from src.simulation.monitor import ProcessMonitor
+from src.vision.safety_monitor import create_default_safety_envelope, IntrusionDetector
 
 def visualization_process(processed_queue):
     """Main visualization process."""
@@ -23,12 +25,35 @@ def visualization_process(processed_queue):
     last_render = time.time()
     frames_processed = 0
     
+    # Create safety envelope
+    robot_base = np.array([0, 0, 0])  # Adjust based on your robot's position
+    safety_envelope = create_default_safety_envelope(
+        robot_base=robot_base,
+        workspace_radius=1.0,  # 1 meter radius
+        height=1.5  # 1.5 meters height
+    )
+    
+    # Create intrusion detector
+    detector = IntrusionDetector(safety_envelope)
+    
+    # Add safety envelope visualization
+    vis.add_safety_envelope(safety_envelope.points)
+    
     def timer_callback(obj, event):
         nonlocal last_render, frames_processed
         try:
             while True:  # Process all available frames
                 cloud_data = processed_queue.get_nowait()
+                
+                # Check for intrusions
+                has_intrusion, intrusion_points = detector.process_point_cloud(cloud_data)
+                
+                # Update visualization
                 vis.update_point_cloud(cloud_data)
+                if has_intrusion:
+                    print(f"WARNING: Intrusion detected with {len(intrusion_points)} points!")
+                    vis.highlight_intrusion_points(intrusion_points)
+                
                 frames_processed += 1
                 
                 # Limit max renders to ~30 FPS

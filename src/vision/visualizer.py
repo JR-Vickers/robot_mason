@@ -59,6 +59,36 @@ class PointCloudVisualizer:
         self.target_actor.GetProperty().SetPointSize(3)
         self.target_actor.GetProperty().SetOpacity(0.3)  # Semi-transparent
         
+        # Create VTK pipeline for safety envelope
+        self.envelope_points = vtk.vtkPoints()
+        self.envelope_cells = vtk.vtkCellArray()
+        self.envelope_polydata = vtk.vtkPolyData()
+        self.envelope_polydata.SetPoints(self.envelope_points)
+        
+        self.envelope_mapper = vtk.vtkPolyDataMapper()
+        self.envelope_mapper.SetInputData(self.envelope_polydata)
+        
+        self.envelope_actor = vtk.vtkActor()
+        self.envelope_actor.SetMapper(self.envelope_mapper)
+        self.envelope_actor.GetProperty().SetColor(0.0, 1.0, 0.0)  # Green
+        self.envelope_actor.GetProperty().SetOpacity(0.2)
+        self.envelope_actor.GetProperty().SetRepresentationToWireframe()
+        
+        # Create VTK pipeline for intrusion points
+        self.intrusion_points = vtk.vtkPoints()
+        self.intrusion_vertices = vtk.vtkCellArray()
+        self.intrusion_polydata = vtk.vtkPolyData()
+        self.intrusion_polydata.SetPoints(self.intrusion_points)
+        self.intrusion_polydata.SetVerts(self.intrusion_vertices)
+        
+        self.intrusion_mapper = vtk.vtkPolyDataMapper()
+        self.intrusion_mapper.SetInputData(self.intrusion_polydata)
+        
+        self.intrusion_actor = vtk.vtkActor()
+        self.intrusion_actor.SetMapper(self.intrusion_mapper)
+        self.intrusion_actor.GetProperty().SetColor(1.0, 0.0, 0.0)  # Red
+        self.intrusion_actor.GetProperty().SetPointSize(5)
+        
         # Create text overlay for debug info
         self.text_actor = vtk.vtkTextActor()
         self.text_actor.SetInput("FPS: --\nPoints: --\nCompletion: --%")
@@ -71,6 +101,8 @@ class PointCloudVisualizer:
         self.renderer.SetBackground(0.1, 0.1, 0.1)
         self.renderer.AddActor(self.current_actor)
         self.renderer.AddActor(self.target_actor)
+        self.renderer.AddActor(self.envelope_actor)
+        self.renderer.AddActor(self.intrusion_actor)
         self.renderer.AddActor(self.text_actor)
         self.renderer.AddActor(create_coordinate_frame())
         
@@ -186,6 +218,65 @@ class PointCloudVisualizer:
         self.target_polydata.GetPointData().SetScalars(vtk_colors)
         
         self.target_polydata.Modified()
+
+    def add_safety_envelope(self, points):
+        """
+        Add safety envelope visualization.
+        
+        Args:
+            points: Nx3 array of boundary points
+        """
+        num_points = len(points)
+        if num_points < 4:
+            print("Warning: Not enough points for safety envelope")
+            return
+            
+        # Update points
+        points_array = points.astype(np.float32)
+        self.envelope_points.SetNumberOfPoints(num_points)
+        vtk_array = numpy_support.numpy_to_vtk(points_array, deep=False)
+        self.envelope_points.SetData(vtk_array)
+        
+        # Create triangulation
+        delaunay = vtk.vtkDelaunay3D()
+        temp_poly = vtk.vtkPolyData()
+        temp_poly.SetPoints(self.envelope_points)
+        delaunay.SetInputData(temp_poly)
+        delaunay.Update()
+        
+        # Extract surface
+        surface = vtk.vtkDataSetSurfaceFilter()
+        surface.SetInputConnection(delaunay.GetOutputPort())
+        surface.Update()
+        
+        # Set the surface as our envelope
+        self.envelope_polydata.ShallowCopy(surface.GetOutput())
+        self.envelope_polydata.Modified()
+    
+    def highlight_intrusion_points(self, points):
+        """
+        Highlight points that have intruded into the safety envelope.
+        
+        Args:
+            points: Nx3 array of intrusion points
+        """
+        num_points = len(points)
+        
+        # Update points
+        points_array = points.astype(np.float32)
+        self.intrusion_points.SetNumberOfPoints(num_points)
+        vtk_array = numpy_support.numpy_to_vtk(points_array, deep=False)
+        self.intrusion_points.SetData(vtk_array)
+        
+        # Update vertices
+        if num_points > 0:
+            cell_array = np.empty(num_points * 2, dtype=np.int64)
+            cell_array[::2] = 1
+            cell_array[1::2] = np.arange(num_points, dtype=np.int64)
+            cells = numpy_support.numpy_to_vtkIdTypeArray(cell_array, deep=False)
+            self.intrusion_vertices.SetCells(num_points, cells)
+        
+        self.intrusion_polydata.Modified()
 
     def start(self, timer_callback, fps=60):
         """Start the visualization with a timer callback."""
